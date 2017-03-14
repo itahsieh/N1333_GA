@@ -1,0 +1,25 @@
+#!/bin/bash
+###### Job name ######
+#PBS -N GA
+###### Output files ######
+#PBS -o GA.out
+#PBS -e GA.err
+###### Number of nodes and cores ######
+#PBS -l nodes=1:ppn=8
+###### Queue name ######
+#PBS -q small
+###### Specific the shell types ######
+#PBS -S /bin/bash
+
+###### Enter this job's working directory ######
+PBS_O_WORKDIR=/tiara/home/ithsieh/N1333
+cd $PBS_O_WORKDIR
+
+if [ -n "$PBS_NODEFILE" ]; then
+  if [ -f $PBS_NODEFILE ]; then
+    echo $PBS_NODEFILE > MPIHOST
+  fi
+fi
+
+mpiexec -n 8 -v \
+python mpiGA.py | tee history.log
