@@ -31,7 +31,7 @@ class model:
                 # Velocity (m/s)
                 self.Vr = V_ref * ( r / r_ref )**-0.5
                 # Temperature (Kelvin)
-                self.T_k = 71.*(r/0.00032467532)**-1 +60.7*(r/0.00032467532)**-0.4
+                self.T_k = temp1 * (r/0.00032467532)**-1 + temp2 * (r/0.00032467532)**-0.4
                 # turbulent speed (m/s)
                 self.Vt = 400.
                 # Molecular Abundance (fraction)

@@ -10,8 +10,6 @@ __status__ = "Developing"
 
 #######################################################
 # set up the parameters of the genetic algorithm
-npop = 16
-max_nselect = 8
 GoalOfError = 1e-2
 MAX_GEN = 100
 TemperatureFactor = 1.0  
@@ -20,15 +18,15 @@ cooling_factor = 1.0
 # the parameters of the searching domain
 params = {'density_cutoff':0.0002,
           'density_scale': 1e15,
-          'density_powerlaw':-2.2 }
-nparams = len(params)
+          'temp1':71.0,
+          'temp2':60.7}
+params_fixed = {'density_powerlaw':-2.2}
 
 #######################################################
 from numpy import zeros
 from math import log,exp,tan,pi
 import random
 import time
-
 from subprocess import call
 
 from mpi4py import MPI
@@ -36,70 +34,40 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
+nparams = len(params)
+npop = size
+max_nselect = npop/2
 npop_proc = npop /size
-assert npop_proc * size == npop
 
 #######################################################
+import target as tg
+import run_chromosome
+
 # run a specific population
 def run_pop(par,chromosome_id):
-    id_str = str(chromosome_id)
-    call(['mkdir','-p','working_dir/chromosome_'+id_str])
-    with open('preprocessor/model.py', 'rt') as fin:
-        with open("working_dir/chromosome_"+id_str+"/model.py", "wt") as fout:
-            for line in fin:
-                new_line = line
-                for key in par.keys():
-                    new_line = new_line.replace(str(key), str(par[key]) )
-                fout.write(new_line)
-    call(['sh','run_chromosome',id_str])
+    global params_fixed
+    result = run_chromosome.run( par, params_fixed, chromosome_id, tg)
     # return the value of weighted difference 
-    return compare_error(id_str)
+    return compare_error(result)
 
 
-## load the target data
-if rank == 0:
-    beam_tmp = []
-    target_tmp = []
-    with open("target.dat") as f:
-        for line in f:
-            if line[0] == '#':
-                continue
-            column = line.split() 
-            beam_tmp.append(float(column[0]))
-            target_tmp.append(float(column[1]))
-    beam = zeros(len(beam_tmp))
-    target = zeros(len(beam_tmp))
-    beam[:] = beam_tmp
-    target[:] = target_tmp
-else:
-    beam = None
-    target = None
-    
-beam = comm.bcast( beam,   root=0)
-target = comm.bcast( target, root=0)
+ndata=0
+for i in range(len(tg.luminance)):
+    ndata += len(tg.luminance[i])
 
 # compare the result to the observational data
-def compare_error(id_str):
-    beam_tmp=[]
-    target_tmp=[]
-    with open("working_dir/chromosome_"+id_str+"/beam_luminocity.txt") as f:
-        for line in f:
-            if line[0] == '#':
-                continue
-            column = line.split()
-            beam_tmp.append(float(column[0]))
-            target_tmp.append(float(column[1]))
-
-    global beam,target
+def compare_error(simulation):
     error=0.
-    for i, val in enumerate(beam_tmp):
-        if beam[i] != val:
-            print 'beam doesn`t match',i,beam[i],val
-            exit()
-        rel_diff = abs(log(target_tmp[i]/target[i]))
-        error += rel_diff 
-    error = exp( error / len(beam) ) - 1.0
-    return error
+    global ndata
+    for i in range(len(tg.luminance)):
+        for j in range(len(tg.luminance[i])):
+            ratio = simulation[i][j] / tg.luminance[i][j][2]
+            if ratio > 0.0:
+                rel_diff = abs( log( ratio ) )
+            else: 
+                rel_diff = 10.0
+            error += rel_diff
+    return exp( error / ndata ) - 1.0
 
 
 # mutate from the reproduced chromosome
@@ -107,8 +75,10 @@ def mutate(par,FurnaceTemperature):
     global TemperatureFactor
     new_params = par.copy()
     for key in par.keys():
-        RandomFloat = random.uniform(-1.0, 1.0) 
-        RandomDistribution = FurnaceTemperature * tan( 0.5 * pi * RandomFloat )
+        RandomDistribution = 1e3
+        while abs(RandomDistribution) > 1e2:
+            RandomFloat = random.uniform(-1.0, 1.0) 
+            RandomDistribution = FurnaceTemperature * tan( 0.5 * pi * RandomFloat )
         factor = exp( RandomDistribution )
         new_params[key] = TemperatureFactor * factor * par[key]
     return new_params
@@ -157,7 +127,7 @@ def GatherErrorAndPopulation_Selection(critical_error):
         nselect = None
 
     return nselect
-  
+
   
 def message_output(gen_id, NumberOfSurvivor, error):
     hour,minute,second = GetElapsedTime()
@@ -174,6 +144,10 @@ def GetElapsedTime():
 
 #######################################################
 
+
+
+
+
 GEN_ID = 0
 
 if rank == 0:
@@ -183,9 +157,10 @@ if rank == 0:
 
     # use timer measure execution time
     t0 = time.time()
-    
+ 
     # test the first ancestor
     error_ancestor = run_pop(params,rank)
+
     hour,minute,second = GetElapsedTime()
     print 'GEN %6d.   The error of the ancestor:%10.5e. Elapsed:%5d:%02d:%02d' %(GEN_ID,error_ancestor,hour,minute,second)
 else:
@@ -335,12 +310,15 @@ for GEN_ID in range(2,MAX_GEN+1):
 
 # Final output message
 if rank == 0:
+    print 'The fixed parameters:'
+    for key in params_fixed:
+        print key,params_fixed[key]
+        
     print 'The chosen parameters:'
     for key in pops_select[0]:
         print key,pops_select[0][key]
+    
     print 'The error:',minimum_error
-
-
 
 
 
