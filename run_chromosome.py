@@ -28,15 +28,13 @@ def run( par, par_fixed, chromosome_id, target):
                 
                 fout.write(new_line)
 
-    call(['rm','-rf','working_dir/'+DIR_ID+'/'+DIR_ID+'.log'])
-
     # enter working directory
     os.chdir(WORKING_DIR+'/'+DIR_ID)
 
     # generate model
     
     shutil.copy('../../preprocessor/grid.py','grid.py')
-    call([PRESPARX,'-o','model','>>',DIR_ID+'.log'], stdout=FNULL)
+    call([PRESPARX,'-o','model'], stdout=FNULL)
     
     
     result = []
@@ -77,16 +75,19 @@ def run( par, par_fixed, chromosome_id, target):
                 for line in f:
                     pass
                 last = line
-            call(['rm','-f','tmp.log'])
             simulated_luminance = float(last.rstrip('\n').split()[2])
             result[i].append( simulated_luminance )
             
+            #os.remove('tmp.log')
+            call(['rm','-rf','tmp.log'])
             
+            #shutil.rmtree(convolved_file)
             call(['rm','-rf',convolved_file])
-        
+        #shutil.rmtree(image_file)
+        #os.remove(image_file+'.fits')
         call(['rm','-rf',image_file,image_file+'.fits'])
-    
-    call(['rm','-f','model'])
+    #os.remove('model')
+    call(['rm','-rf','model'])
 
     
 
